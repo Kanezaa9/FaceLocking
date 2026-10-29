@@ -49,6 +49,9 @@ class ArcFaceEmbedderONNX:
         self.in_name = self.sess.get_inputs()[0].name
         self.out_name = self.sess.get_outputs()[0].name
 
+        self.in_shape = self.sess.get_inputs()[0].shape
+        self.is_nchw = (len(self.in_shape) == 4 and self.in_shape[1] == 3)
+
         if debug:
             print("[embed] model loaded")
             print("[embed] input:", self.sess.get_inputs()[0].shape)
@@ -59,7 +62,10 @@ class ArcFaceEmbedderONNX:
             aligned_bgr = cv2.resize(aligned_bgr, (self.in_w, self.in_h))
         rgb = cv2.cvtColor(aligned_bgr, cv2.COLOR_BGR2RGB).astype(np.float32)
         rgb = (rgb - 127.5) / 128.0
-        x = np.transpose(rgb, (2, 0, 1))[None, ...]
+        if self.is_nchw:
+            x = np.transpose(rgb, (2, 0, 1))[None, ...]
+        else:
+            x = rgb[None, ...]
         return x.astype(np.float32)
 
     @staticmethod

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Tuple, List
 
 import cv2
@@ -141,13 +142,32 @@ class Haar5ptDetector:
         if self.face_cascade.empty():
             raise RuntimeError(f"Failed to load cascade: {haar_xml}")
 
-        self.mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
-            static_image_mode=False,
-            max_num_faces=int(max_mesh_faces),
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-        )
+        if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
+            self.mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
+                static_image_mode=False,
+                max_num_faces=int(max_mesh_faces),
+                refine_landmarks=True,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+            self.landmarker = None
+        else:
+            from mediapipe.tasks import python as mp_python
+            from mediapipe.tasks.python import vision as mp_vision
+            task_path = Path("models/face_landmarker.task")
+            if not task_path.exists():
+                raise FileNotFoundError(f"Missing model file: {task_path}")
+            base_options = mp_python.BaseOptions(model_asset_path=str(task_path))
+            options = mp_vision.FaceLandmarkerOptions(
+                base_options=base_options,
+                running_mode=mp_vision.RunningMode.IMAGE,
+                num_faces=int(max_mesh_faces),
+                min_face_detection_confidence=0.3,
+                min_face_presence_confidence=0.3,
+                min_tracking_confidence=0.3,
+            )
+            self.landmarker = mp_vision.FaceLandmarker.create_from_options(options)
+            self.mp_face_mesh = None
 
         self.IDX_LEFT_EYE = 33
         self.IDX_RIGHT_EYE = 263
@@ -168,23 +188,36 @@ class Haar5ptDetector:
         return faces.astype(np.int32)
 
     def _facemesh_all(self, frame_bgr: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray]]:
-        """(kps 5x2, full mesh Nx2) in pixels for every face FaceMesh finds (up to max_mesh_faces)."""
         H, W = frame_bgr.shape[:2]
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        res = self.mp_face_mesh.process(rgb)
-        if not res.multi_face_landmarks:
-            return []
-
         idxs = [self.IDX_LEFT_EYE, self.IDX_RIGHT_EYE, self.IDX_NOSE_TIP, self.IDX_MOUTH_LEFT, self.IDX_MOUTH_RIGHT]
         out = []
-        for face in res.multi_face_landmarks:
-            mesh = np.array([[p.x * W, p.y * H] for p in face.landmark], dtype=np.float32)
-            kps = mesh[idxs].copy()
-            if kps[0, 0] > kps[1, 0]:
-                kps[[0, 1]] = kps[[1, 0]]
-            if kps[3, 0] > kps[4, 0]:
-                kps[[3, 4]] = kps[[4, 3]]
-            out.append((kps, mesh))
+
+        if self.mp_face_mesh is not None:
+            res = self.mp_face_mesh.process(rgb)
+            if not res.multi_face_landmarks:
+                return []
+            for face in res.multi_face_landmarks:
+                mesh = np.array([[p.x * W, p.y * H] for p in face.landmark], dtype=np.float32)
+                kps = mesh[idxs].copy()
+                if kps[0, 0] > kps[1, 0]:
+                    kps[[0, 1]] = kps[[1, 0]]
+                if kps[3, 0] > kps[4, 0]:
+                    kps[[3, 4]] = kps[[4, 3]]
+                out.append((kps, mesh))
+        elif self.landmarker is not None:
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            res = self.landmarker.detect(mp_image)
+            if not res.face_landmarks:
+                return []
+            for face in res.face_landmarks:
+                mesh = np.array([[p.x * W, p.y * H] for p in face], dtype=np.float32)
+                kps = mesh[idxs].copy()
+                if kps[0, 0] > kps[1, 0]:
+                    kps[[0, 1]] = kps[[1, 0]]
+                if kps[3, 0] > kps[4, 0]:
+                    kps[[3, 4]] = kps[[4, 3]]
+                out.append((kps, mesh))
         return out
 
     def _facemesh_5pt(self, frame_bgr: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:

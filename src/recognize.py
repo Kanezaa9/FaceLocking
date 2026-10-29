@@ -25,7 +25,7 @@ from .haar_5pt import Haar5ptDetector, align_face_5pt
 from .embed import ArcFaceEmbedderONNX
 
 DB_PATH = Path("data/db/face_db.npz")
-DEFAULT_THRESHOLD = 0.34  # from evaluate.py
+DEFAULT_THRESHOLD = 0.27  # calibrated (lower = stricter)
 
 
 def load_db(path: Path) -> Dict[str, np.ndarray]:

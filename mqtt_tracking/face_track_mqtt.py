@@ -138,7 +138,8 @@ def main():
                 f = faces[0]
                 center = face_center(f)
                 aligned, _ = align_face_5pt(frame, f.kps, out_size=(112, 112))
-                name, dist, accepted = matcher.match(embedder.embed(aligned).embedding)
+                m = matcher.match(embedder.embed(aligned).embedding)
+                name, dist, accepted = m.name, m.distance, m.accepted
 
                 if locked_name is None:
                     if accepted:

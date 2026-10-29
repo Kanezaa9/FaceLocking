@@ -15,18 +15,16 @@ Keys:
 from __future__ import annotations
 
 import time
-from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import cv2
 import numpy as np
 
 from .haar_5pt import Haar5ptDetector, align_face_5pt
 from .embed import ArcFaceEmbedderONNX
+from .recognize import DB_PATH, DEFAULT_THRESHOLD, Matcher, load_db
 from .servo_control import ServoController
 
-DB_PATH = Path("data/db/face_db.npz")
-DEFAULT_THRESHOLD = 0.34
 SERVO_PORT = "COM5"
 
 LOCK_LOSS_FRAMES = 15
@@ -42,29 +40,6 @@ SWEEP_MAX_ANGLE = 150
 SWEEP_STEP_DEG = 2          # degrees to move per sweep tick
 SWEEP_STEP_EVERY_S = 0.05   # how often to advance the sweep (seconds)
 
-
-def load_db(path: Path) -> Dict[str, np.ndarray]:
-    if not path.exists():
-        return {}
-    data = np.load(str(path), allow_pickle=True)
-    return {k: np.asarray(data[k], dtype=np.float32).reshape(-1) for k in data.files}
-
-
-class Matcher:
-    def __init__(self, db: Dict[str, np.ndarray], threshold: float):
-        self.db = db
-        self.threshold = threshold
-        self.names: List[str] = sorted(db.keys())
-        self.mat = np.stack([db[n] for n in self.names], axis=0) if self.names else None
-
-    def match(self, emb: np.ndarray):
-        if self.mat is None:
-            return None, 1.0, False
-        sims = self.mat @ emb.reshape(-1)
-        i = int(np.argmax(sims))
-        dist = 1.0 - float(sims[i])
-        ok = dist <= self.threshold
-        return (self.names[i] if ok else None), dist, ok
 
 
 def face_center(f) -> np.ndarray:
@@ -145,7 +120,8 @@ def main():
 
                 aligned, _ = align_face_5pt(frame, f.kps, out_size=(112, 112))
                 res = embedder.embed(aligned)
-                detected_name, detected_dist, detected_accepted = matcher.match(res.embedding)
+                m = matcher.match(res.embedding)
+                detected_name, detected_dist, detected_accepted = m.name, m.distance, m.accepted
 
                 if locked_name is None:
                     if detected_accepted:

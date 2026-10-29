@@ -89,7 +89,11 @@ face-recognition-5pt/
     ├── recognize.py       # Step 6: Live recognition
     ├── recognize_track.py # Recognition + servo tracking
     ├── evaluate.py        # Threshold evaluation (genuine/impostor)
-    └── servo_control.py   # ESP8266 serial servo controller
+    ├── servo_control.py   # ESP8266 serial servo controller
+    ├── yolox.py           # CPU YOLOX ONNX pedestrian/body detector
+    ├── body_features.py   # Multi-zone body feature extraction & online learning
+    ├── tracker.py         # Body tracking & face-to-body containment association
+    └── body_lock.py       # Full-body tracking + 180-deg rotation re-identification
 ```
 
 ## Setup — Files You Need to Download
@@ -163,6 +167,9 @@ python -m src.recognize_track
 
 # Face locking + position + expressions + blinks (no servo)
 python -m src.face_lock --name ATUMANYIRE --camera 1
+
+# Full body tracking + face association + 180-deg rotation recognition (CPU-optimized YOLOX)
+python -m src.body_lock --name Tehila --camera 0
 
 # Evaluate threshold
 python -m src.evaluate

@@ -159,7 +159,8 @@ def main():
                 center = face_center(f)
                 nose = f.kps[2].astype(np.float32)
                 aligned, _ = align_face_5pt(frame, f.kps, out_size=(112, 112))
-                name, dist, accepted = matcher.match(embedder.embed(aligned).embedding)
+                m = matcher.match(embedder.embed(aligned).embedding)
+                name, dist, accepted = m.name, m.distance, m.accepted
 
                 if locked_name is None:
                     if accepted:
@@ -196,7 +197,7 @@ def main():
                 else:
                     now = time.time()
                     if abs(norm) > TRACK_DEADBAND and now - last_track_t >= TRACK_UPDATE_S and found_this_frame:
-                        target_angle = float(np.clip(target_angle + sign * norm * TRACK_GAIN_DEG,
+                        target_angle = float(np.clip(target_angle - sign * norm * TRACK_GAIN_DEG,
                                                      ANGLE_MIN, ANGLE_MAX))
                         last_track_t = now
                 motor.set_angle(target_angle)
@@ -210,7 +211,13 @@ def main():
                     print(f"[face] {motion}  (at {side}, tilt -> {target_angle:.0f} deg)")
                     last_motion = motion
 
-                draw_tacho_needle(vis, (W // 2, H // 2), (int(locked_nose[0]), int(y)))
+                cx, cy = W // 2, H // 2
+                r = int(min(W, H) * NEEDLE_DIAL_FRAC)
+                needle_rad = math.radians(target_angle - 90.0)
+                tip_x = int(cx + (r * 0.90) * math.sin(needle_rad))
+                tip_y = int(cy - (r * 0.90) * math.cos(needle_rad))
+                draw_tacho_needle(vis, (cx, cy), (tip_x, tip_y))
+                cv2.circle(vis, (int(locked_nose[0]), int(y)), 5, (0, 255, 255), -1)
                 cv2.putText(vis, f"FACE: {side} | {motion}", (10, 55),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255) if motion != "still" else (255, 255, 255), 2)
                 cv2.putText(vis, f"LOCKED: {locked_name}  offset={norm:+.2f}  tilt={target_angle:.0f}",
@@ -219,6 +226,12 @@ def main():
                 prev_y, vel_y, last_motion = None, 0.0, ""
                 target_angle = sweeper.step()
                 motor.set_angle(target_angle)
+                cx, cy = W // 2, H // 2
+                r = int(min(W, H) * NEEDLE_DIAL_FRAC)
+                needle_rad = math.radians(target_angle - 90.0)
+                tip_x = int(cx + (r * 0.90) * math.sin(needle_rad))
+                tip_y = int(cy - (r * 0.90) * math.cos(needle_rad))
+                draw_tacho_needle(vis, (cx, cy), (tip_x, tip_y), color=(0, 165, 255))
                 cv2.putText(vis, f"searching... tilt={target_angle:.0f}", (10, H - 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
 

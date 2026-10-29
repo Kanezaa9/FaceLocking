@@ -53,11 +53,11 @@ from .expression import ExpressionDetector
 from .recognize import DB_PATH, DEFAULT_THRESHOLD, Matcher, MatchResult, load_db
 
 MAX_FACES = 4
-LOCK_CONFIRM_FRAMES = 5
+LOCK_CONFIRM_FRAMES = 2
 LOCK_LOSS_FRAMES = 15
 LOCK_SWITCH_FRAMES = 8
 LOCK_MATCH_RADIUS = 150    # px the nose may jump between frames and still count as the locked face
-IMPOSTOR_DIST = 0.60       # locked face this far from the template = clearly a different person
+IMPOSTOR_DIST = 0.72       # locked face this far from the template = clearly a different person
 CENTER_ZONE = 0.10         # |offset| below this fraction of width/height counts as CENTER
 NOSE_EMA = 0.5
 NEEDLE_DIAL_FRAC = 0.16    # tacho dial radius as a fraction of the shorter frame side

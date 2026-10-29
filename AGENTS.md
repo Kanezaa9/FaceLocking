@@ -12,6 +12,7 @@ python -m src.enroll           # prompts for a name, captures samples, writes DB
 python -m src.recognize        # live recognition
 python -m src.recognize_track  # recognition + servo search/lock tracking
 python -m src.face_lock --name <NAME> [--camera 1]   # multi-face labels, lock, expressions, blinks
+python -m src.body_lock [--name <NAME>] [--camera 0]   # full-body tracking, face-to-body association, 180-deg rotation recognition
 python -m src.evaluate         # genuine/impostor sweep to pick a threshold
 python -m mqtt_tracking.face_track_mqtt [--mode fixed|onboard] [--invert] [--width 1280 --height 720]
 python -m mqtt_tracking.face_track_mqtt_vertical [--invert]   # tilt-only; needs dual firmware

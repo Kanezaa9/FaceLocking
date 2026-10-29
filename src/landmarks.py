@@ -17,16 +17,28 @@ def main():
     if face.empty():
         raise RuntimeError(f"Failed to load cascade: {cascade_path}")
 
-    fm = mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
+    if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
+        fm = mp.solutions.face_mesh.FaceMesh(
+            static_image_mode=False,
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+        landmarker = None
+    else:
+        from pathlib import Path
+        from mediapipe.tasks import python as mp_python
+        from mediapipe.tasks.python import vision as mp_vision
+        base_options = mp_python.BaseOptions(model_asset_path="models/face_landmarker.task")
+        options = mp_vision.FaceLandmarkerOptions(
+            base_options=base_options,
+            running_mode=mp_vision.RunningMode.IMAGE,
+            num_faces=1,
+        )
+        landmarker = mp_vision.FaceLandmarker.create_from_options(options)
+        fm = None
 
-    # CAP_DSHOW forces the DirectShow backend on Windows, which is more
-    # reliable here than the default MSMF backend.
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         raise RuntimeError("Camera not opened. Try camera index 0/1/2.")
@@ -44,7 +56,6 @@ def main():
     while True:
         ok, frame = cap.read()
         if not ok:
-            # skip a bad frame instead of killing the whole program
             continue
 
         H, W = frame.shape[:2]
@@ -55,15 +66,20 @@ def main():
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        res = fm.process(rgb)
+        lm_pts = None
+        if fm is not None:
+            res = fm.process(rgb)
+            if res.multi_face_landmarks:
+                lm_pts = [[p.x * W, p.y * H] for p in res.multi_face_landmarks[0].landmark]
+        elif landmarker is not None:
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            res = landmarker.detect(mp_image)
+            if res.face_landmarks:
+                lm_pts = [[p.x * W, p.y * H] for p in res.face_landmarks[0]]
 
-        if res.multi_face_landmarks:
-            lm = res.multi_face_landmarks[0].landmark
+        if lm_pts:
             idxs = [IDX_LEFT_EYE, IDX_RIGHT_EYE, IDX_NOSE_TIP, IDX_MOUTH_LEFT, IDX_MOUTH_RIGHT]
-            pts = []
-            for i in idxs:
-                p = lm[i]
-                pts.append([p.x * W, p.y * H])
+            pts = [lm_pts[i] for i in idxs]
             kps = np.array(pts, dtype=np.float32)  # (5,2)
 
             # enforce left/right ordering
